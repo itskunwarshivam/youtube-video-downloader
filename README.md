@@ -31,6 +31,18 @@ Stop with Ctrl+C. Restart after editing app.py.
 
 If the build complains about the `functions` pattern, delete vercel.json and redeploy.
 
+## If a site blocks Vercel (for example YouTube)
+
+Some sites refuse requests from cloud datacenter IPs. In Vercel go to
+Project > Settings > Environment Variables and add:
+
+- `PROXY_URL` : a proxy address, e.g. `http://user:pass@host:port`
+  Use a residential or ISP proxy from a provider that allows video sites.
+  All lookups and downloads are routed through it, so it is billed by data used.
+- `YT_CLIENTS` (optional, try this first, it is free) : `android_vr,web_safari`
+
+Then Deployments > Redeploy so the variables take effect.
+
 ## Limits on Vercel
 
 - No ffmpeg: no MP3/WAV conversion and no merging of separate video and audio.
