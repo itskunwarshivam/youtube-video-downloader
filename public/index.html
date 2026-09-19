@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkGrab – Save a YouTube video in any available format</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f6;--ink:#14213d;--muted:#5b6785;--line:#c9d0e0;--card:#fff;--accent:#2f4bff;--accent-ink:#fff;--hi:#ffd23f;--err:#c62828}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1526;--ink:#eef1f6;--muted:#9aa6c4;--line:#2a3556;--card:#17203a;--accent:#7b8dff;--accent-ink:#0f1526;--err:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,sans-serif;line-height:1.5}
+main{max-width:760px;margin:0 auto;padding:10vh 20px 48px}
+h1{font-size:clamp(2.4rem,8vw,4.6rem);line-height:.98;font-weight:800;letter-spacing:-.03em;margin:0 0 14px}
+h1 mark{background:var(--hi);color:#14213d;padding:0 .12em;border-radius:6px}
+.sub{color:var(--muted);font-size:1.1rem;margin:0 0 32px;max-width:52ch}
+.bar{display:flex;gap:10px;flex-wrap:wrap}
+input[type=url]{flex:1 1 320px;font:inherit;font-size:1.1rem;padding:16px 18px;border:2px solid var(--ink);border-radius:12px;background:var(--card);color:var(--ink)}
+button{font:inherit;font-weight:600;cursor:pointer}
+.go{padding:16px 26px;border:2px solid var(--ink);border-radius:12px;background:var(--accent);color:var(--accent-ink);font-size:1.1rem;box-shadow:4px 4px 0 var(--ink)}
+.go:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
+.go:disabled{opacity:.6;cursor:wait}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+#msg{min-height:1.6em;margin:14px 0 0;color:var(--err);font-weight:600}
+#result{display:none;margin-top:24px;background:var(--card);border:2px solid var(--ink);border-radius:16px;overflow:hidden}
+#result.on{display:block;animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.98);opacity:0}}
+@media (prefers-reduced-motion:reduce){#result.on{animation:none}}
+.meta{display:flex;gap:16px;padding:16px;border-bottom:2px solid var(--line)}
+.meta img{width:160px;max-width:38%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--line)}
+.meta h2{font-size:1.15rem;margin:0 0 4px;line-height:1.25}
+.meta p{margin:0;color:var(--muted)}
+.group{padding:14px 16px 6px}
+.group h3{margin:0 0 4px;font-size:1rem}
+.group small{color:var(--muted);display:block;margin-bottom:8px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.row span{font-weight:600}
+.row em{color:var(--muted);font-style:normal;font-weight:400;margin-left:8px}
+.row a{padding:7px 16px;border:2px solid var(--ink);border-radius:999px;color:var(--ink);text-decoration:none;font-weight:600;white-space:nowrap}
+.row a:hover{background:var(--hi);color:#14213d}
+.note{margin-top:40px;color:var(--muted);font-size:.9rem;max-width:60ch}
+</style>
+</head>
+<body>
+<main>
+  <h1>Paste a link. Get the <mark>file.</mark></h1>
+  <p class="sub">See every video and audio stream YouTube offers for a link, then download the one you want.</p>
+
+  <div class="bar">
+    <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube link" autocomplete="off">
+    <button class="go" id="fetch">Find formats</button>
+  </div>
+  <p id="msg" role="alert"></p>
+
+  <section id="result" aria-live="polite">
+    <div class="meta">
+      <img id="thumb" alt="">
+      <div><h2 id="title"></h2><p id="chan"></p></div>
+    </div>
+    <div id="groups"></div>
+  </section>
+
+  <p class="note">Only download videos you own, that are licensed for reuse, or that you have permission to save. Downloading may violate YouTube's Terms of Service, and you're responsible for how you use the files.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const GROUPS = [
+  ["both", "Video with sound", "Ready to play. YouTube usually offers these at lower resolutions."],
+  ["video", "Video only", "Higher resolutions, but no audio track."],
+  ["audio", "Audio only", "M4A and WebM audio, exactly as YouTube stores it."]
+];
+
+const mmss = s => { if(!s) return ""; const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
+  return (h ? h+":"+String(m).padStart(2,"0") : m) + ":" + String(x).padStart(2,"0"); };
+const mb = b => b ? (b/1048576).toFixed(1) + " MB" : "";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function label(f){
+  if(f.kind === "audio") return f.ext.toUpperCase() + (f.abr ? " · " + Math.round(f.abr) + " kbps" : "");
+  return f.ext.toUpperCase() + " · " + (f.height ? f.height + "p" : "?") + (f.fps > 30 ? " " + Math.round(f.fps) + "fps" : "");
+}
+
+function render(d, url){
+  $("thumb").src = d.thumbnail || ""; $("title").textContent = d.title;
+  $("chan").textContent = [d.channel, mmss(d.duration)].filter(Boolean).join(", ");
+  $("groups").innerHTML = GROUPS.map(([kind, title, hint]) => {
+    const list = d.formats.filter(f => f.kind === kind)
+      .sort((a,b) => kind === "audio" ? (b.abr||0)-(a.abr||0) : (b.height||0)-(a.height||0));
+    if(!list.length) return "";
+    return `<div class="group"><h3>${title}</h3><small>${hint}</small>` + list.map(f =>
+      `<div class="row"><span>${esc(label(f))}<em>${mb(f.size)}</em></span>` +
+      `<a href="/api/download?url=${encodeURIComponent(url)}&fid=${encodeURIComponent(f.id)}">Download</a></div>`
+    ).join("") + `</div>`;
+  }).join("") || `<div class="group">No downloadable formats were found for this video.</div>`;
+  $("result").classList.add("on");
+}
+
+async function fetchInfo(){
+  const url = $("url").value.trim();
+  $("msg").textContent = ""; $("result").classList.remove("on");
+  if(!url){ $("msg").textContent = "Paste a YouTube link first."; return; }
+  $("fetch").disabled = true; $("fetch").textContent = "Looking…";
+  try{
+    const r = await fetch("/api/info", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({url})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || "Something went wrong.");
+    render(d, url);
+  }catch(e){ $("msg").textContent = e.message; }
+  finally{ $("fetch").disabled = false; $("fetch").textContent = "Find formats"; }
+}
+
+$("fetch").onclick = fetchInfo;
+$("url").addEventListener("keydown", e => { if(e.key === "Enter") fetchInfo(); });
+</script>
+</body>
+</html>
